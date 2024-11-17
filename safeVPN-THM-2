@@ -1,0 +1,49 @@
+#!/bin/bash
+
+# Autor: Nisrin Ahmed aka Wh1teDrvg0n
+# Propósito: Evitar conectividad con otros usuarios en una plataforma CTF usando VPN
+
+# Validación de IP
+if [[ -z "$1" || ! "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "Error: Proporcione una dirección IP válida como argumento."
+    exit 1
+fi
+
+# Limpieza de reglas existentes
+iptables -P INPUT ACCEPT
+iptables -P FORWARD ACCEPT
+iptables -P OUTPUT ACCEPT
+iptables -t nat -F
+iptables -t mangle -F
+iptables -F
+iptables -X
+iptables -Z
+
+ip6tables -P INPUT DROP
+ip6tables -P FORWARD DROP
+ip6tables -P OUTPUT DROP
+ip6tables -t nat -F
+ip6tables -t mangle -F
+ip6tables -F
+ip6tables -X
+ip6tables -Z
+
+# Permitir tráfico esencial (ICMP, TCP y UDP) hacia la IP especificada
+iptables -A INPUT -p icmp -i tun0 -s $1 --icmp-type echo-request -j ACCEPT
+iptables -A INPUT -p icmp -i tun0 -s $1 --icmp-type echo-reply -j ACCEPT
+iptables -A OUTPUT -p icmp -o tun0 -d $1 --icmp-type echo-request -j ACCEPT
+iptables -A OUTPUT -p icmp -o tun0 -d $1 --icmp-type echo-reply -j ACCEPT
+
+iptables -A INPUT -i tun0 -p tcp -s $1 -j ACCEPT
+iptables -A OUTPUT -o tun0 -p tcp -d $1 -j ACCEPT
+iptables -A INPUT -i tun0 -p udp -s $1 -j ACCEPT
+iptables -A OUTPUT -o tun0 -p udp -d $1 -j ACCEPT
+
+# Bloqueo de cualquier otro tráfico
+iptables -A INPUT -i tun0 -j DROP
+iptables -A OUTPUT -o tun0 -j DROP
+iptables -A INPUT -m state --state NEW,INVALID -j DROP
+
+# Log de paquetes bloqueados
+iptables -A INPUT -j LOG --log-prefix "Paquete bloqueado: " --log-level 4
+iptables -A OUTPUT -j LOG --log-prefix "Salida bloqueada: " --log-level 4
